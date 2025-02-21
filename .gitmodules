@@ -1,1 +1,5 @@
 
+[submodule "model/perceptron/submodule"]
+	path = model/perceptron/submodule
+	url = https://github.com/selfanti/machine_learing_methods.git
+	branch = master1
