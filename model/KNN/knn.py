@@ -38,7 +38,7 @@ def encode_dataset_x(dataset):
 def min_max_scaling(x):
     return (x - x.min()) / (x.max() - x.min())
 # Download latest version
-path =r'U:\Users\Enlink\PycharmProjects\machine_learing_methods\data\knn'
+path =r'PythonProject/data/knn'
 
 print("Path to dataset files:", path)
 dataset=pd.read_csv(path+r'\adult.csv')
