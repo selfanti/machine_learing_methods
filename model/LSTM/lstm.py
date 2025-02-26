@@ -1,4 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-from ..RNN import MyRNN
+
+
+from ..RNN import rnn
+
+
