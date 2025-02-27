@@ -69,9 +69,9 @@ def min_max_scaling(x):
 
 if __name__ =="__main__":
     #house和unit分开训练
-    type='house'
+    house_type='house'
     path= r"data/RNN/ma_lga_12345.csv"
-    train_set,test_set=data=load_data(path,type)
+    train_set,test_set=data=load_data(path,house_type)
     print(train_set)
 
 
