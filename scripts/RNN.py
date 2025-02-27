@@ -43,8 +43,8 @@ def load_data(path,type):
     train_df_sorted=train_df.groupby("saledate",group_keys=False).apply(lambda group:group.sort_values("bedrooms").reset_index(drop=True))
     test_df_sorted = test_df.groupby("saledate", group_keys=False).apply(
         lambda group: group.sort_values("bedrooms").reset_index(drop=True))
-    # train_df_sorted=train_df_sorted[['MA','bedrooms']]
-    # test_df_sorted = test_df_sorted[['MA', 'bedrooms']]
+    train_df_sorted=train_df_sorted[['MA','bedrooms']]
+    test_df_sorted = test_df_sorted[['MA', 'bedrooms']]
     print("组内排序后:\n")
     print(train_df_sorted.head(10))
     print(test_df_sorted.head(10))
@@ -53,16 +53,15 @@ def load_data(path,type):
     df_normalized_train[columns_to_normalize] = df_normalized_train[columns_to_normalize].apply(min_max_scaling)
     df_normalized_test = test_df_sorted.copy()
     df_normalized_test[columns_to_normalize] = df_normalized_test[columns_to_normalize].apply(min_max_scaling)
+    array_train=df_normalized_train.values.reshape(-1,4,2)
+    array_test = df_normalized_train.values.reshape(-1,4,2)
     # 查看结果
-    # print("处理后的数据信息：")
-    # print(df_normalized_train.info())
-    # print(df_normalized_test.info())
-    print('处理后的数据示例')
-    print('训练集：\n')
-    print(df_normalized_train.head())
-    print('测试集：\n')
-    print(df_normalized_test.head())
-    return df_normalized_train,df_normalized_test
+    # print('处理后的数据示例')
+    # print('训练集：\n')
+    # print(array_train)
+    # print('测试集：\n')
+    # print(array_test )
+    return array_train,array_test
 
 def min_max_scaling(x):
     return (x - x.min()) / (x.max() - x.min())
@@ -73,6 +72,7 @@ if __name__ =="__main__":
     type='house'
     path= r"data/RNN/ma_lga_12345.csv"
     train_set,test_set=data=load_data(path,type)
+    print(train_set)
 
 
 
