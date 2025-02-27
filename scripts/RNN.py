@@ -53,6 +53,8 @@ def load_data(path,type):
     df_normalized_train[columns_to_normalize] = df_normalized_train[columns_to_normalize].apply(min_max_scaling)
     df_normalized_test = test_df_sorted.copy()
     df_normalized_test[columns_to_normalize] = df_normalized_test[columns_to_normalize].apply(min_max_scaling)
+    print(df_normalized_test[:4])
+    print(df_normalized_train[:4])
     array_train=df_normalized_train.values.reshape(-1,4,2)
     array_test = df_normalized_train.values.reshape(-1,4,2)
     # 查看结果
@@ -72,7 +74,10 @@ if __name__ =="__main__":
     house_type='house'
     path= r"data/RNN/ma_lga_12345.csv"
     train_set,test_set=data=load_data(path,house_type)
-    print(train_set)
+    print(train_set[0])
 
 
-
+# [[0.04291524 0.        ]
+#  [0.31991072 0.66666667]
+#  [0.05897251 0.        ]
+#  [0.51802247 0.66666667]]
