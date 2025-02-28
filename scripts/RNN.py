@@ -50,8 +50,6 @@ def load_data(path,type):
     df_normalized_train[columns_to_normalize] = df_normalized_train[columns_to_normalize].apply(min_max_scaling)
     df_normalized_test = test_df_sorted.copy()
     df_normalized_test[columns_to_normalize] = df_normalized_test[columns_to_normalize].apply(min_max_scaling)
-    print(df_normalized_train.head(8))
-    print(df_normalized_test.head(8))
     array_train_list=[]
     array_test_list =[]
     for i in range(46):
@@ -100,6 +98,7 @@ if __name__ =="__main__":
     criterion=nn.MSELoss()
     loss_list=[]
     loss_mean_list=[]
+    print("训练轮数:",train_epochs)
     for epoch in range(train_epochs):
         for i in range(40):
             optimizer.zero_grad()
