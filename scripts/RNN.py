@@ -5,6 +5,7 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 import numpy as np
 #定义用于回归的RNN模型
+train_epochs=50
 class RNN_Prediction(nn.Module):
     def __init__(self,inputdim,hiddendim,outputdim):
         super().__init__()
@@ -55,8 +56,8 @@ def load_data(path,type):
     array_test_list =[]
     for i in range(46):
         array_train_list.append(torch.from_numpy(df_normalized_train[i*4:i*4+4].values.astype(np.float32)).unsqueeze(1))
-    for i in range(3):
-        array_test_list.append(torch.from_numpy(df_normalized_test[i*4:i*4+4].values.astype(np.float32)).unsqueeze(1))
+    for j in range(3):
+        array_test_list.append(torch.from_numpy(df_normalized_test[j*4:j*4+4].values.astype(np.float32)).unsqueeze(1))
     array_train=torch.cat(array_train_list,dim=1)
     array_test =torch.cat(array_test_list,dim=1)
     return array_train,array_test
@@ -64,33 +65,53 @@ def load_data(path,type):
 def min_max_scaling(x):
     return (x - x.min()) / (x.max() - x.min())
 def create_dataset(data, time_steps):
-    X, Y = [], []
+    x, y = [], []
     for i in range(data.shape[1] - time_steps):
-        X.append(data[:,i:i+time_steps,:])
-        Y.append(data[:,i+time_steps,:])
-    X=torch.cat(X,dim=1)
-    Y = torch.cat(Y,dim=1)
-    return X,Y
+        x.append(data[:,i:i+time_steps,:])
+        y.append(data[:,i+time_steps,:])
 
+    return x,y
+def draw_loss_epochs(loss_mean_list,epochs):
+    # 生成示例数据（假设 x 已排序）
+    x = np.linspace(0, epochs, epochs)
+    # 绘制平滑曲线
+    plt.figure(figsize=(10, 6))
+    plt.plot(x, loss_mean_list, '-', color='blue', linewidth=2, label='Smooth Curve')
+    plt.title("Smooth Curve of Ordered Data")
+    plt.xlabel("X")
+    plt.ylabel("loss_mean_list")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
 if __name__ =="__main__":
     #house和unit分开训练
     house_type='house'
     path= r"data/RNN/ma_lga_12345.csv"
     train_set,test_set=data=load_data(path,house_type)
-    print(train_set.shape)
-    #训练时的窗口大小为8
-    X_list,Y_list=train_list=create_dataset(train_set,8)
-    print(X_list.shape)
-    model=RNN_Prediction(2,128,2)
+    print('train_set.shape:',train_set.shape)
+    print('test_set.shape:',test_set.shape)
+    #训练时的窗口大小为6
+    X_list,Y_list=train_list=create_dataset(train_set,6)
+    print('X_list.shape:',X_list[0].shape)
+    print('Y_list.shape:',Y_list[0].shape)
+    #X_list = X_list.reshape(X_list.shape[0], X_list.shape[1], 1)  # 转换为3D输入
+    model=RNN_Prediction(2,64,2)
     optimizer=torch.optim.Adam(model.parameters(),lr=0.001)
     criterion=nn.MSELoss()
-    for epoch in range(200):
-        optimizer.zero_grad()
-        output=model(X_list[epoch])
-        loss=criterion(output,Y_list[epoch])
-        loss.backward()
-        optimizer.step()
+    loss_list=[]
+    loss_mean_list=[]
+    for epoch in range(train_epochs):
+        for i in range(40):
+            optimizer.zero_grad()
+            output=model(X_list[i])
+            loss=criterion(output,Y_list[i])
+            loss.backward()
+            loss_list.append(loss.item())
+            optimizer.step()
 
+        loss_mean_list.append(sum(loss_list)/len(loss_list))
+        loss_list=[]
+    draw_loss_epochs(loss_mean_list,train_epochs)
 
 
 
