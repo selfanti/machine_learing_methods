@@ -93,7 +93,7 @@ if __name__ =="__main__":
     print('X_list.shape:',X_list[0].shape)
     print('Y_list.shape:',Y_list[0].shape)
     #X_list = X_list.reshape(X_list.shape[0], X_list.shape[1], 1)  # 转换为3D输入
-    model=RNN_Prediction(2,64,2)
+    model=RNN_Prediction(2,128,2)
     optimizer=torch.optim.Adam(model.parameters(),lr=0.001)
     criterion=nn.MSELoss()
     loss_list=[]
