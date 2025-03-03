@@ -19,6 +19,6 @@ class MyRNN(nn.Module):
         for i in range(seq_len):
 
             x_t=x_seq[:,i,:]
-            h_t=x_t@self.W_xh+h_t@self.W_hh+self.b_h
+            h_t=torch.tanh(x_t@self.W_xh+h_t@self.W_hh+self.b_h)
             hidden_states.append(h_t.unsqueeze(1))
         return torch.cat(hidden_states,dim=1)
