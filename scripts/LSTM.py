@@ -1,7 +1,13 @@
 from model.LSTM import lstm
+from model.RNN import rnn
 import torch
 import torch.nn as nn
+from RNN import  load_data,create_dataset,draw_loss_epochs
 import numpy as np
+
+from scripts.RNN import train_epochs
+
+
 class Regression_LSTM(nn.Module):
     def __init__(self,input_dim,hidden_dim,output_dim):
         super().__init__()
@@ -17,15 +23,29 @@ class Regression_LSTM(nn.Module):
         return output
 if __name__=='__main__':
     # 测试代码
-    input_dim = 5
-    hidden_dim = 10
-    output_dim = 1
+    input_dim = 2
+    hidden_dim = 64
+    output_dim = 2
+    train_epochs=100
     model = Regression_LSTM(input_dim, hidden_dim, output_dim)
-    x = torch.randn(3, 7, input_dim)  # (batch=3, seq_len=7, input_dim=5)
-    y = model(x)
-    print(y.shape)  # 预期输出: torch.Size([3, 1])
+    house_type='house'
+    path= r"data/RNN/ma_lga_12345.csv"
+    train_set,test_set=data=load_data(path,house_type)
+    X_list, Y_list = train_list = create_dataset(train_set, 6)
     criterion = nn.MSELoss()
-    y_true = torch.randn(3, 1)
-    loss = criterion(y, y_true)
-    print(loss)
-    loss.backward()
+    optimizer=torch.optim.Adam(model.parameters(),lr=0.001)
+    loss_list=[]
+    loss_mean_list=[]
+    for epoch in range(train_epochs):
+        for i in range(40):
+            optimizer.zero_grad()
+            output=model(X_list[i])
+            loss=criterion(output,Y_list[i])
+            loss.backward()
+            loss_list.append(loss.item())
+            optimizer.step()
+
+        loss_mean_list.append(sum(loss_list) / len(loss_list))
+        loss_list = []
+
+    draw_loss_epochs(loss_mean_list, train_epochs)
