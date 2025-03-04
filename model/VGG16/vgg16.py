@@ -71,3 +71,4 @@ class VGG16(nn.Module):
         x=self.features(x)
         x=torch.flatten(x,1)
         x=self.classifier(x)
+        return x
