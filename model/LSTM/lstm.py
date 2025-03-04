@@ -1,3 +1,4 @@
+#Implementation of Long Short-term Memory Networks(LSTM)
 import numpy as np
 import matplotlib.pyplot as plt
 import torch

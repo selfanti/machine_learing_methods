@@ -1,3 +1,5 @@
+#Implementation of Recurrent Neural Network
+
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
