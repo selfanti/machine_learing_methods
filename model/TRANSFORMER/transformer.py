@@ -8,6 +8,7 @@ import math
 # ------------------- 核心组件实现 -------------------
 class ScaledDotProductAttention(nn.Module):
     """缩放点积注意力"""
+    #self-attention,参考self_attention.png
 
     def __init__(self, dropout=0.1):
         super().__init__()
@@ -15,20 +16,24 @@ class ScaledDotProductAttention(nn.Module):
 
     def forward(self, q, k, v, mask=None):
         # q, k, v: [batch_size, seq_len, d_k]
-        d_k = k.size(-1)
+        d_k = k.size(-1)   #获取一个多头的维度
+        #MatMUL和Scale
         scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(d_k)  # [batch, seq_len, seq_len]
-
+        #Mask
         if mask is not None:
             scores = scores.masked_fill(mask == 0, -1e9)
-
+        #softmax
         attn_weights = F.softmax(scores, dim=-1)
+        #dropout
         attn_weights = self.dropout(attn_weights)
+        #MatMul
         output = torch.matmul(attn_weights, v)  # [batch, seq_len, d_v]
         return output, attn_weights
 
 
 class MultiHeadAttention(nn.Module):
     """多头注意力机制"""
+    #注意，本模块包含了论文中的Multi-head Attention 和Add&Norm模块
 
     def __init__(self, d_model, num_heads, dropout=0.1):
         super().__init__()
@@ -57,20 +62,25 @@ class MultiHeadAttention(nn.Module):
         return x.transpose(1, 2).contiguous().view(batch_size, seq_len, -1)
 
     def forward(self, q, k, v, mask=None):
+        #注意这里接收的三个输入实际上是相同的，都是经过词嵌入（Embedding）和位置编码（Positional Encoding）后的输入矩阵
+        #词嵌入能够捕捉单词的语义信息，语义相近的单词在向量空间中的距离也较近
+        #位置编码的作用就是为模型引入单词的位置信息，让模型能够区分不同位置的单词。位置编码通常通过特定的函数计算得到
+        #输入矩阵形状为batch_size*d,d为向量维度，论文中为512; batch_size为单词个数
         residual = q  # 残差连接
 
-        # 线性投影 + 拆分多头
+        # 线性投影 + 拆分多头，线性投影得到了矩阵Q,K,V，再将这几个矩阵分给多个头
         q = self.split_heads(self.wq(q))
         k = self.split_heads(self.wk(k))
         v = self.split_heads(self.wv(v))
 
         # 计算注意力
         attn_output, attn_weights = self.attention(q, k, v, mask)
-        attn_output = self.combine_heads(attn_output)  # 合并多头
+        attn_output = self.combine_heads(attn_output)  # 合并多头,将多个自注意力模块输入拼接起来
 
         # 输出投影 + 残差连接 + LayerNorm
         output = self.wo(attn_output)
         output = self.dropout(output)
+        #Add&Norm
         output = self.layer_norm(output + residual)
         return output, attn_weights
 
@@ -91,6 +101,7 @@ class PositionWiseFFN(nn.Module):
         x = self.dropout(x)
         x = self.linear2(x)
         x = self.dropout(x)
+        #Add&Norm
         x = self.layer_norm(x + residual)
         return x
 
@@ -108,6 +119,9 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe.unsqueeze(0))  # [1, max_len, d_model]
 
     def forward(self, x):
+        # print(x.shape)
+        # print(self.pe[:, :x.size(1)].shape)
+        # print((x + self.pe[:, :x.size(1)]).shape)
         return x + self.pe[:, :x.size(1)]
 
 
