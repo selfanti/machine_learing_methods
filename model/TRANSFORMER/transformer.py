@@ -213,11 +213,12 @@ class Transformer(nn.Module):
         return self.output_layer(decoder_output)
 
     def generate_mask(self, src, tgt, pad_idx=0):
-        # 创建源序列填充掩码 [batch, 1, 1, src_len]
+        # 创建源序列填充掩码和目标序列填充掩码[batch, 1, 1, src_len]，主要是为了解决源句子和目标句子长度不一致的问题
         src_mask = (src != pad_idx).unsqueeze(1).unsqueeze(2)
 
-        # 创建目标序列填充掩码和未来掩码
+
         tgt_pad_mask = (tgt != pad_idx).unsqueeze(1).unsqueeze(2)  # [batch, 1, 1, tgt_len]
+        # 创建未来掩码，避免泄露
         tgt_len = tgt.size(1)
         tgt_sub_mask = torch.tril(torch.ones(tgt_len, tgt_len)).bool().to(tgt.device)
         tgt_mask = tgt_pad_mask & tgt_sub_mask  # [batch, 1, tgt_len, tgt_len]
