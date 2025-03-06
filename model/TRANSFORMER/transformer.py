@@ -19,7 +19,7 @@ class ScaledDotProductAttention(nn.Module):
         d_k = k.size(-1)   #获取一个多头的维度
         #MatMUL和Scale
         scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(d_k)  # [batch, seq_len, seq_len]
-        #Mask
+        #Mask，Decoder中会使用
         if mask is not None:
             scores = scores.masked_fill(mask == 0, -1e9)
         #softmax
@@ -77,7 +77,7 @@ class MultiHeadAttention(nn.Module):
         attn_output, attn_weights = self.attention(q, k, v, mask)
         attn_output = self.combine_heads(attn_output)  # 合并多头,将多个自注意力模块输入拼接起来
 
-        # 输出投影 + 残差连接 + LayerNorm
+        # 输出投影
         output = self.wo(attn_output)
         output = self.dropout(output)
         #Add&Norm
@@ -119,9 +119,6 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe.unsqueeze(0))  # [1, max_len, d_model]
 
     def forward(self, x):
-        # print(x.shape)
-        # print(self.pe[:, :x.size(1)].shape)
-        # print((x + self.pe[:, :x.size(1)]).shape)
         return x + self.pe[:, :x.size(1)]
 
 
@@ -213,11 +210,10 @@ class Transformer(nn.Module):
         return self.output_layer(decoder_output)
 
     def generate_mask(self, src, tgt, pad_idx=0):
-        # 创建源序列填充掩码和目标序列填充掩码[batch, 1, 1, src_len]，主要是为了解决源句子和目标句子长度不一致的问题
+        # 创建源序列填充掩码和目标序列填充掩码[batch, 1, 1, src_len]，主要是为了解决源句子和目标句子长度不一致的问题，pad_idx是用来填充的值
         src_mask = (src != pad_idx).unsqueeze(1).unsqueeze(2)
-
-
         tgt_pad_mask = (tgt != pad_idx).unsqueeze(1).unsqueeze(2)  # [batch, 1, 1, tgt_len]
+
         # 创建未来掩码，避免泄露
         tgt_len = tgt.size(1)
         tgt_sub_mask = torch.tril(torch.ones(tgt_len, tgt_len)).bool().to(tgt.device)
@@ -228,6 +224,7 @@ class Transformer(nn.Module):
 
 # ------------------- 使用示例 -------------------
 if __name__ == "__main__":
+    #使用翻译语言作为例子
     # 超参数
     src_vocab_size = 1000  # 源语言词汇表大小
     tgt_vocab_size = 800  # 目标语言词汇表大小
@@ -240,7 +237,7 @@ if __name__ == "__main__":
     # 初始化模型
     model = Transformer(src_vocab_size, tgt_vocab_size, d_model, num_heads, num_layers)
 
-    # 生成模拟数据
+    # 生成模拟数据，即源语言词表和目标语言的词表
     src = torch.randint(0, src_vocab_size, (batch_size, seq_len))  # 源序列
     tgt = torch.randint(0, tgt_vocab_size, (batch_size, seq_len))  # 目标序列
 
