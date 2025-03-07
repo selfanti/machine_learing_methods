@@ -11,12 +11,13 @@ def load_mnist_images(path):
         # 跳过前16字节的元数据（魔数、图像数量、行数、列数）
         data = np.frombuffer(f.read(), np.uint8, offset=16)
         # 转换为 (样本数, 28, 28) 形状，并添加通道维度（灰度图）
-        return data.reshape(-1, 28, 28, 1)
+        return data.copy().reshape(-1, 28, 28, 1)  #注意copy，转换成可修改的tensor
 
 def load_mnist_labels(path):
     with gzip.open(path, 'rb') as f:
         # 跳过前8字节的元数据
-        return np.frombuffer(f.read(), np.uint8, offset=8)
+        data=np.frombuffer(f.read(), np.uint8, offset=8)
+        return data.copy()  #注意copy，转换成可修改的tensor
 
 def get_img_labels_dataset(type):
     # 加载数据
