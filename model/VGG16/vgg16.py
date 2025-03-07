@@ -3,12 +3,12 @@ import torch.nn as nn
 import numpy as np
 
 class VGG16(nn.Module):
-    def __init__(self, num_classes=1000):
+    def __init__(self, num_classes=10):
         super().__init__()
         #特征层
         self.features=nn.Sequential(
             #Block1 (2卷积层)
-            nn.Conv2d(3,64,kernel_size=3,padding=1),
+            nn.Conv2d(1,64,kernel_size=3,padding=1),
             nn.ReLU(inplace=True),
             nn.Conv2d(64,64,kernel_size=3,padding=1),
             nn.ReLU(inplace=True),
