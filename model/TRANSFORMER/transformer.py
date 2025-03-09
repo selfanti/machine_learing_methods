@@ -2,8 +2,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.onnx
 import math
-
+import netron
 
 # ------------------- 核心组件实现 -------------------
 class ScaledDotProductAttention(nn.Module):
@@ -236,18 +237,19 @@ if __name__ == "__main__":
 
     # 初始化模型
     model = Transformer(src_vocab_size, tgt_vocab_size, d_model, num_heads, num_layers)
-
+    print(model)
     # 生成模拟数据，即源语言词表和目标语言的词表
     src = torch.randint(0, src_vocab_size, (batch_size, seq_len))  # 源序列
     tgt = torch.randint(0, tgt_vocab_size, (batch_size, seq_len))  # 目标序列
 
     # 生成掩码
     src_mask, tgt_mask = model.generate_mask(src, tgt)
-
+    input=src, tgt[:, :-1], src_mask, tgt_mask[:, :, :-1, :-1]
     # 前向传播
     output = model(src, tgt[:, :-1], src_mask, tgt_mask[:, :, :-1, :-1])
     print("Output shape:", output.shape)  # [batch_size, tgt_seq_len-1, tgt_vocab_size]
-
+    torch.onnx.export(model,input, "./demo.pth")  # 将 pytorch 模型以 onnx 格式导出并保存
+    #netron.start("./demo.pth")  # 输出网络结构
     # 计算损失（假设目标序列为tgt_input）
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     loss = criterion(output.view(-1, tgt_vocab_size), tgt[:, 1:].contiguous().view(-1))
