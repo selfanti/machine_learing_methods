@@ -44,7 +44,6 @@ if __name__=='__main__':
         for i in range(40):
             optimizer.zero_grad()
             output=model(X_list[i])
-            print(len(output))
             loss=criterion(output,Y_list[i])
             loss.backward()
             loss_list.append(loss.item())
@@ -56,9 +55,18 @@ if __name__=='__main__':
     torch.save(model.state_dict(),r"U:\Users\Enlink\PycharmProjects\machine_learning_user\weights_model\lstm_weights.pth")
     model.eval()
     predict_value=[]
+    eval_loss=[]
+    copy_train_data=train_set.clone()
+    print('copy_train_data:',copy_train_data.shape)
 
-    for j in range(39,42):
-        output=model()
-        loss=criterion(output,)
+    for j in range(40,43):
+        this_window=copy_train_data[:,j:j+6,:]
+        output=model(this_window)
+        copy_train_data=torch.concat([copy_train_data,output.unsqueeze(1)],dim=1)
+        predict_value.append(output)
+        #loss=criterion(output,test_set[j-40])
+        #eval_loss.append(loss)
 
     draw_loss_epochs(loss_mean_list, train_epochs)
+    print('copy_train_data.shape: ',copy_train_data.shape)
+    torch.concat([train_set,test_set],dim=1)
