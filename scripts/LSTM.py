@@ -64,8 +64,8 @@ if __name__=='__main__':
         output=model(this_window)
         copy_train_data=torch.concat([copy_train_data,output.unsqueeze(1)],dim=1)
         predict_value.append(output)
-        #loss=criterion(output,test_set[j-40])
-        #eval_loss.append(loss)
+        loss=criterion(output,test_set[:,j-40,:])
+        eval_loss.append(loss)
 
     draw_loss_epochs(loss_mean_list, train_epochs)
     print('copy_train_data.shape: ',copy_train_data.shape)
