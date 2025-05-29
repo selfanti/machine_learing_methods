@@ -1,0 +1,314 @@
+#Implementation of Transformer
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import math
+import matplotlib.pyplot as plt
+
+# ------------------- 核心组件实现 -------------------
+class ScaledDotProductAttentionWithGrad(nn.Module):
+    """带梯度记录的缩放点积注意力"""
+
+    def __init__(self, dropout=0.1):
+        super().__init__()
+        self.dropout = nn.Dropout(dropout)
+        self.attn_weights = None  # 保存注意力权重
+        self.attn_grad = None  # 保存注意力梯度
+
+    def save_attn_grad(self, grad):
+        """保存梯度"""
+        self.attn_grad = grad.detach()
+
+    def forward(self, q, k, v, mask=None):
+        d_k = k.size(-1)
+        scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(d_k)
+
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, -1e9)
+
+        attn_weights = F.softmax(scores, dim=-1)
+        attn_weights = self.dropout(attn_weights)
+
+        # 注册钩子保存梯度
+        attn_weights.register_hook(self.save_attn_grad)
+        self.attn_weights = attn_weights  # 保存权重
+
+        output = torch.matmul(attn_weights, v)
+        return output, attn_weights
+
+
+class MultiHeadAttentionWithCAM(nn.Module):
+    """多头注意力机制"""
+    #注意，本模块包含了论文中的Multi-head Attention 和Add&Norm模块
+
+    def __init__(self, d_model, num_heads, dropout=0.1):
+        super().__init__()
+        assert d_model % num_heads == 0
+        self.d_k = d_model // num_heads
+        self.num_heads = num_heads
+        self.attention = ScaledDotProductAttentionWithGrad(dropout)  # 使用修改后的注意力模块
+        # 线性投影层
+        self.wq = nn.Linear(d_model, d_model)
+        self.wk = nn.Linear(d_model, d_model)
+        self.wv = nn.Linear(d_model, d_model)
+        self.wo = nn.Linear(d_model, d_model)
+
+        self.attention = ScaledDotProductAttentionWithGrad(dropout)
+        self.dropout = nn.Dropout(dropout)
+        self.layer_norm = nn.LayerNorm(d_model)
+
+    def split_heads(self, x):
+        """拆分多头 [batch, seq_len, d_model] -> [batch, num_heads, seq_len, d_k]"""
+        batch_size, seq_len = x.size(0), x.size(1)
+        return x.view(batch_size, seq_len, self.num_heads, self.d_k).transpose(1, 2)
+
+    def combine_heads(self, x):
+        """合并多头 [batch, num_heads, seq_len, d_k] -> [batch, seq_len, d_model]"""
+        batch_size, _, seq_len, _ = x.size()
+        return x.transpose(1, 2).contiguous().view(batch_size, seq_len, -1)
+
+    def forward(self, q, k, v, mask=None):
+        #注意这里接收的三个输入实际上是相同的，都是经过词嵌入（Embedding）和位置编码（Positional Encoding）后的输入矩阵
+        #词嵌入能够捕捉单词的语义信息，语义相近的单词在向量空间中的距离也较近
+        #位置编码的作用就是为模型引入单词的位置信息，让模型能够区分不同位置的单词。位置编码通常通过特定的函数计算得到
+        #输入矩阵形状为batch_size*d,d为向量维度，论文中为512; batch_size为单词个数
+        residual = q  # 残差连接
+
+        # 线性投影 + 拆分多头，线性投影得到了矩阵Q,K,V，再将这几个矩阵分给多个头
+        q = self.split_heads(self.wq(q))
+        k = self.split_heads(self.wk(k))
+        v = self.split_heads(self.wv(v))
+
+        # 计算注意力
+        attn_output, attn_weights = self.attention(q, k, v, mask)
+        attn_output = self.combine_heads(attn_output)  # 合并多头,将多个自注意力模块输入拼接起来
+
+        # 输出投影
+        output = self.wo(attn_output)
+        output = self.dropout(output)
+        #Add&Norm
+        output = self.layer_norm(output + residual)
+        return output, (attn_weights,self.attention.attn_grad)
+
+
+class PositionWiseFFN(nn.Module):
+    """位置前馈网络"""
+
+    def __init__(self, d_model, d_ff, dropout=0.1):
+        super().__init__()
+        self.linear1 = nn.Linear(d_model, d_ff)
+        self.linear2 = nn.Linear(d_ff, d_model)
+        self.dropout = nn.Dropout(dropout)
+        self.layer_norm = nn.LayerNorm(d_model)
+
+    def forward(self, x):
+        residual = x
+        x = F.relu(self.linear1(x))
+        x = self.dropout(x)
+        x = self.linear2(x)
+        x = self.dropout(x)
+        #Add&Norm
+        x = self.layer_norm(x + residual)
+        return x
+
+
+class PositionalEncoding(nn.Module):
+    """位置编码"""
+
+    def __init__(self, d_model, max_len=5000):
+        super().__init__()
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe.unsqueeze(0))  # [1, max_len, d_model]
+
+    def forward(self, x):
+        return x + self.pe[:, :x.size(1)]
+
+
+# ------------------- Encoder & Decoder 层实现 -------------------
+class EncoderLayerWithCAM(nn.Module):
+    """Transformer编码器层"""
+
+    def __init__(self, d_model, num_heads, d_ff, dropout=0.1):
+        super().__init__()
+        self.self_attn = MultiHeadAttentionWithCAM(d_model, num_heads, dropout)
+        self.ffn = PositionWiseFFN(d_model, d_ff, dropout)
+        self.attn_data=None
+    def forward(self, x, mask=None):
+        x, attn_data = self.self_attn(x, x, x, mask)
+        self.attn_data=attn_data
+        x = self.ffn(x)
+        return x
+
+
+class DecoderLayer(nn.Module):
+    """Transformer解码器层"""
+
+    def __init__(self, d_model, num_heads, d_ff, dropout=0.1):
+        super().__init__()
+        self.self_attn = MultiHeadAttentionWithCAM(d_model, num_heads, dropout)
+        self.cross_attn = MultiHeadAttentionWithCAM(d_model, num_heads, dropout)
+        self.ffn = PositionWiseFFN(d_model, d_ff, dropout)
+
+    def forward(self, x, encoder_output, src_mask=None, tgt_mask=None):
+        # 自注意力（带目标序列掩码）
+        x, _ = self.self_attn(x, x, x, tgt_mask)
+        # 交叉注意力（查询来自解码器，键/值来自编码器）
+        x, _ = self.cross_attn(x, encoder_output, encoder_output, src_mask)
+        x = self.ffn(x)
+        return x
+
+
+# ------------------- 完整Transformer实现 -------------------
+class TransformerWithCAM(nn.Module):
+    """完整Transformer模型"""
+
+    def __init__(self, src_vocab_size, tgt_vocab_size, d_model=512, num_heads=8,
+                 num_layers=6, d_ff=2048, dropout=0.1):
+        super().__init__()
+        self.d_model = d_model
+
+        # 词嵌入 + 位置编码
+        self.src_embed = nn.Embedding(src_vocab_size, d_model)
+        #print(tgt_vocab_size.shape)
+        self.tgt_embed = nn.Embedding(tgt_vocab_size, d_model)
+        self.pos_encoder = PositionalEncoding(d_model)
+
+        # 编码器堆叠
+        self.encoder_layers = nn.ModuleList([
+            EncoderLayerWithCAM(d_model, num_heads, d_ff, dropout)
+            for _ in range(num_layers)
+        ])
+
+        # 解码器堆叠
+        self.decoder_layers = nn.ModuleList([
+            DecoderLayer(d_model, num_heads, d_ff, dropout)
+            for _ in range(num_layers)
+        ])
+
+        # 输出层
+        self.output_layer = nn.Linear(d_model, tgt_vocab_size)
+
+        # 初始化参数
+        self._init_weights()
+
+    def _init_weights(self):
+        for p in self.parameters():
+            if p.dim() > 1:
+                nn.init.xavier_uniform_(p)
+
+    def encode(self, src, src_mask=None):
+        src_emb = self.pos_encoder(self.src_embed(src) * math.sqrt(self.d_model))
+        for layer in self.encoder_layers:
+            src_emb = layer(src_emb, src_mask)
+        return src_emb
+
+    def decode(self, tgt, encoder_output, src_mask=None, tgt_mask=None):
+        tgt_emb = self.pos_encoder(self.tgt_embed(tgt) * math.sqrt(self.d_model))
+        for layer in self.decoder_layers:
+            tgt_emb = layer(tgt_emb, encoder_output, src_mask, tgt_mask)
+        return tgt_emb
+
+    def forward(self, src, tgt, src_mask=None, tgt_mask=None):
+        encoder_output = self.encode(src, src_mask)
+        decoder_output = self.decode(tgt, encoder_output, src_mask, tgt_mask)
+        return self.output_layer(decoder_output)
+
+    def generate_mask(self, src, tgt, pad_idx=0):
+        # 创建源序列填充掩码和目标序列填充掩码[batch, 1, 1, src_len]，主要是为了解决源句子和目标句子长度不一致的问题，pad_idx是用来填充的值
+        src_mask = (src != pad_idx).unsqueeze(1).unsqueeze(2)
+        tgt_pad_mask = (tgt != pad_idx).unsqueeze(1).unsqueeze(2)  # [batch, 1, 1, tgt_len]
+
+        # 创建未来掩码，避免泄露
+        tgt_len = tgt.size(1)
+        tgt_sub_mask = torch.tril(torch.ones(tgt_len, tgt_len)).bool().to(tgt.device)
+        tgt_mask = tgt_pad_mask & tgt_sub_mask  # [batch, 1, tgt_len, tgt_len]
+
+        return src_mask, tgt_mask
+
+
+class TransformerGradCAM:
+    def __init__(self, model, layer_index=-1):
+        self.model = model
+        self.layer_index = layer_index  # 默认使用最后一层
+        self.handles = []
+
+    def __enter__(self):
+        """注册前向/反向钩子"""
+
+        def forward_hook(module, inputs, outputs):
+            self.attention_weights = module.attn_data[0].detach()
+
+        def backward_hook(module, grad_input, grad_output):
+            self.attention_gradients = module.attn_data[1].detach()
+
+        target_layer = self.model.encoder_layers[self.layer_index]
+        self.handles.append(target_layer.register_forward_hook(forward_hook))
+        self.handles.append(target_layer.register_backward_hook(backward_hook))
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """移除钩子"""
+        for handle in self.handles:
+            handle.remove()
+
+    def generate_cam(self, input_tensor, target_index=None):
+        """
+        生成Grad-CAM热力图
+        :param input_tensor: 输入序列 [batch_size, seq_len]
+        :param target_index: 目标token位置
+        :return: 热力图矩阵 [seq_len, seq_len]
+        """
+        # 前向传播
+        output = self.model(input_tensor, input_tensor)  # 假设使用自回归任务
+
+        # 选择目标位置
+        if target_index is None:
+            target_index = input_tensor.size(1) - 1  # 默认最后一个token
+
+        # 反向传播
+        one_hot = torch.zeros_like(output)
+        one_hot[:, target_index, :].fill_(1)
+        output.backward(gradient=one_hot)
+
+        # 获取权重和梯度
+        weights = self.attention_weights.mean(dim=1)  # 平均多头 [batch, seq_len, seq_len]
+        grads = self.attention_gradients.mean(dim=1)  # 平均多头 [batch, seq_len, seq_len]
+
+        # 计算重要性权重
+        alpha = grads.mean(dim=-1, keepdim=True)  # 全局平均梯度 [batch, seq_len, 1]
+        cam = (weights * alpha).sum(dim=1)  # 加权求和 [batch, seq_len]
+
+        # 归一化处理
+        cam = F.relu(cam)
+        cam = (cam - cam.min()) / (cam.max() - cam.min() + 1e-8)
+        return cam[0].detach().cpu().numpy()  # 取第一个样本
+
+# ------------------- 使用示例 -------------------
+if __name__ == "__main__":
+    #使用翻译语言作为例子
+    # 超参数
+    src_vocab_size = 1000  # 源语言词汇表大小
+    tgt_vocab_size = 1000  # 目标语言词汇表大小
+    d_model = 512
+    num_heads = 8
+    num_layers = 6
+    batch_size = 1
+    seq_len = 20
+    src=torch.randint(0,1000,(1,20))
+    # 初始化模型
+    model = TransformerWithCAM(src_vocab_size, tgt_vocab_size, d_model, num_heads, num_layers)
+    with TransformerGradCAM(model) as cam:
+        heatmap = cam.generate_cam(src)
+
+    print("Heatmap shape:", heatmap.shape)
+
+    plt.imshow(heatmap, cmap='viridis')
+    plt.xlabel("Key Position")
+    plt.ylabel("Query Position")
+    plt.title("Grad-CAM Attention Visualization")
+    plt.colorbar()
+    plt.show()

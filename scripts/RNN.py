@@ -84,7 +84,7 @@ def draw_loss_epochs(loss_mean_list,epochs):
 if __name__ =="__main__":
     #house和unit分开训练
     house_type='house'
-    path= r"data/RNN/ma_lga_12345.csv"
+    path= r"U:\Users\Enlink\PycharmProjects\machine_learning_user\data\RNN\ma_lga_12345.csv"
     train_set,test_set=data=load_data(path,house_type)
     print('train_set.shape:',train_set.shape)
     print('test_set.shape:',test_set.shape)
@@ -110,6 +110,9 @@ if __name__ =="__main__":
 
         loss_mean_list.append(sum(loss_list)/len(loss_list))
         loss_list=[]
+        print(f"epoch:{epoch}  loss:{loss_mean_list[-1]}")
+    torch.save(model.state_dict(),
+               r"U:\Users\Enlink\PycharmProjects\machine_learning_user\weights_model\rnn_weights.pth")
     draw_loss_epochs(loss_mean_list,train_epochs)
 
 

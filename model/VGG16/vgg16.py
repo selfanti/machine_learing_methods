@@ -3,7 +3,7 @@ import torch.nn as nn
 import numpy as np
 
 class VGG16(nn.Module):
-    def __init__(self, num_classes=1000):
+    def __init__(self, num_classes=10):
         super().__init__()
         #特征层
         self.features=nn.Sequential(
